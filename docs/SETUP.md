@@ -60,6 +60,40 @@ First launch asks for the workspace folder. Configuration and a fresh key are ge
 
 The menu should show **Advertising as Laptop Link**. Use **Show configuration folder** to locate the key and configuration. Quit before editing configuration, then relaunch.
 
+## Guided setup and key sharing
+
+With Python 3.9+ installed, run:
+
+```sh
+./scripts/setup.sh
+```
+
+If the app is missing, setup builds it using the same toolchain settings as `package-apps.sh`. If configuration is missing, it prompts for an existing workspace and uses the app's initializer to generate a random 32-byte `client.key`. Existing configuration and its key are reused without rotation. An existing app bundle is reused; rebuild it explicitly when upgrading source.
+
+Setup launches the app, offers the local IPv4 addresses, and reserves five available TCP ports between 8000 and 8999. Enter one of the listed port numbers (Enter selects the first). It prints the selected IP, port, and full download URL:
+
+```text
+http://192.168.1.15:8000/client.key
+```
+
+The original key stays at the configured `keyFile`. A private, Git-ignored copy lives at `.key-share/client.key` inside the repository while sharing. This folder is excluded from the source archive. The HTTP helper serves only `/client.key`, with no directory listing or access to other repository files. It runs in the foreground until Ctrl+C, then removes the copy. A forced kill or power loss may leave the ignored copy behind; remove `.key-share/client.key` manually in that case.
+
+HTTP key transfer is unencrypted and anyone who can reach that endpoint can download the enrollment key while it is running. Use a trusted LAN and stop sharing after enrollment. Allow an incoming connection if macOS asks. A free port does not establish network reachability across firewalls or guest Wi-Fi isolation.
+
+On the controlling Mac, `laptop-link-mcp/scripts/setup.sh` asks for this IP, port, and a safe local key name. It downloads `/client.key`, validates the byte count, and remembers the saved key. Then stop this HTTP helper; the BLE app continues running independently.
+
+Options:
+
+```sh
+# New configuration: choose the workspace without a prompt.
+./scripts/setup.sh --root /absolute/workspace
+
+# Reuse an explicitly chosen configuration, choose an IP, and leave app launch to you.
+./scripts/setup.sh --config /private/config/server.json --bind 192.168.1.15 --no-launch
+```
+
+`--root` is only valid for a new configuration. `--bind` must identify a local IPv4 interface. Run helper checks with `python3 -m unittest discover -s Tests/Setup -v`; these use temporary dummy keys and loopback HTTP, not your enrollment key.
+
 ## Optional command-line initialization
 
 This avoids the folder picker:

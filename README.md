@@ -37,6 +37,17 @@ The first launch generates a unique, random 32-byte enrollment key:
 
 Transfer that file privately to the controlling Mac. Possession of this key authorizes remote filesystem access and command execution. **Do not include it in the source archive or paste its contents into a chat.** No credentials are shipped with the source code.
 
+For guided setup and a temporary HTTP key handoff, run:
+
+```sh
+./scripts/setup.sh
+```
+
+This builds the app if missing, creates configuration and `client.key` if needed (or reuses the configured key), and launches the app. It asks for a local IP address, lists five available ports, and asks which port to use. The key is copied to the Git-ignored `.key-share/client.key` inside this repository, and setup prints `http://IP:PORT/client.key` for the other laptop. Only this endpoint is served. Press Ctrl+C after downloading to stop sharing and remove the copy; the original enrollment key is preserved.
+
+HTTP transfers the enrollment key without encryption: use this optional handoff on a trusted LAN. On the controlling Mac, run [Laptop Link MCP setup](https://github.com/AmbiTyga/laptop-link-mcp) and enter the printed IP and port. See [guided setup](docs/SETUP.md#guided-setup-and-key-sharing) for options. Python 3.9+ is needed for this setup helper, but not for the BLE app itself.
+
+
 ## Visible interactive terminal
 
 Open **New Terminal** from the server menu, or use the companion MCP's `link_terminal_open`. A real terminal window on the receiving Mac shows the shared persistent shell. **Take Control** pauses agent input; **Return Control** hands it back. Closing the window hides it; **End Session** stops it. See [terminal sessions](docs/TERMINALS.md) for input, reconnects, and lifecycle details.

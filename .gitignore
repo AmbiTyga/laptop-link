@@ -4,3 +4,6 @@ dist/
 .DS_Store
 *.key
 server-config.json
+.key-share/
+__pycache__/
+*.pyc
