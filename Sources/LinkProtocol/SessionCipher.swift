@@ -23,9 +23,9 @@ public enum ChannelCrypto {
         return data
     }
 
-    public static func transcript(client: Data, server: Data) throws -> Data {
+    public static func transcript(client: Data, server: Data, format: WireFormat = .json) throws -> Data {
         guard client.count == 32, server.count == 32 else { throw RPCError("auth", "Invalid nonce") }
-        return Data("ble-connection/v1/".utf8) + client + server
+        return Data(format.domain.utf8) + client + server
     }
 
     public static func proof(key: Data, transcript: Data, role: String) -> Data {
@@ -44,11 +44,13 @@ public enum ChannelCrypto {
 public final class SecureChannel {
     private let sendKey: SymmetricKey
     private let receiveKey: SymmetricKey
+    private let authenticatedData: Data
     private var sendSequence: UInt64 = 0
     private var receiveSequence: UInt64 = 0
 
-    public init(key: Data, transcript: Data, server: Bool) throws {
+    public init(key: Data, transcript: Data, server: Bool, format: WireFormat = .json) throws {
         guard key.count == 32 else { throw RPCError("auth", "Enrollment key must contain 32 random bytes") }
+        authenticatedData = Data((format.domain + "data").utf8)
         func derive(_ direction: String) -> SymmetricKey {
             HKDF<SHA256>.deriveKey(inputKeyMaterial: SymmetricKey(data: key), salt: transcript,
                                   info: Data(direction.utf8), outputByteCount: 32)
@@ -61,7 +63,7 @@ public final class SecureChannel {
         guard sendSequence < UInt64.max else { throw RPCError("session_expired", "Reconnect required") }
         let number = sendSequence
         let sealed = try AES.GCM.seal(data, using: sendKey, nonce: nonce(number),
-                                      authenticating: Data("ble-connection/v1/data".utf8))
+                                      authenticating: authenticatedData)
         sendSequence += 1
         return Envelope(type: "data", sequence: number, payload: sealed.ciphertext + sealed.tag)
     }
@@ -73,7 +75,7 @@ public final class SecureChannel {
         }
         let box = try AES.GCM.SealedBox(nonce: nonce(receiveSequence),
                                        ciphertext: payload.dropLast(16), tag: payload.suffix(16))
-        let plain = try AES.GCM.open(box, using: receiveKey, authenticating: Data("ble-connection/v1/data".utf8))
+        let plain = try AES.GCM.open(box, using: receiveKey, authenticating: authenticatedData)
         receiveSequence += 1
         return plain
     }

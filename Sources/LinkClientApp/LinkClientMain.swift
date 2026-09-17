@@ -12,7 +12,7 @@ struct LinkClientMain {
         }
         do {
             if args.contains("--help") {
-                print("link-client --key /path/client.key [--name 'Laptop Link'] [--request /path/request.json] [--timeout 120]")
+                print("link-client --key /path/client.key [--name 'BLE Mac'] [--request /path/request.json] [--timeout 120] [--wire protobuf|json]")
                 print("Default request: server.info. JSON responses go to stdout; diagnostics go to stderr.")
                 return
             }
@@ -27,7 +27,10 @@ struct LinkClientMain {
             } else { request = RPCRequest(method: "server.info") }
             let timeout = option("--timeout").flatMap(Int.init) ?? 120
             guard (1...3600).contains(timeout) else { throw RPCError("arguments", "timeout must be 1–3600 seconds") }
-            let client = try LinkCentralClient(key: key, name: option("--name"), request: request, timeout: timeout) { result in
+            guard let format = WireFormat(rawValue: option("--wire") ?? "protobuf") else {
+                throw RPCError("arguments", "--wire must be protobuf or json")
+            }
+            let client = try LinkCentralClient(key: key, name: option("--name"), request: request, timeout: timeout, format: format) { result in
                 do {
                     let response = try result.get()
                     try FileHandle.standardOutput.write(contentsOf: WireJSON.encode(response) + Data([10]))

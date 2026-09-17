@@ -1,4 +1,4 @@
-# Laptop Link protocol v1
+# Laptop Link protocol: Protobuf v2 and JSON v1
 
 ## BLE service
 
@@ -10,11 +10,25 @@
 
 Subscribe to Response before sending Hello. Use application authentication below; the protocol does not rely on the advertised name or OS Bluetooth pairing as identity.
 
-Each application message is a four-byte unsigned **big-endian length**, followed by that many bytes of UTF-8 envelope JSON. Maximum envelope length: 262144 bytes. Split frames using the limits Core Bluetooth reports, never a hardcoded MTU. Client writes are sequential, each waiting for ATT completion. Server notifications pause when `updateValue` returns false and resume in `peripheralManagerIsReady(toUpdateSubscribers:)`.
+Each application message is a four-byte unsigned **big-endian length**, followed by that many bytes of binary Protobuf (v2) or UTF-8 JSON (legacy v1). Maximum envelope length: 262144 bytes. Split frames using the limits Core Bluetooth reports, never a hardcoded MTU. Client writes are sequential, each waiting for ATT completion. Server notifications pause when `updateValue` returns false and resume in `peripheralManagerIsReady(toUpdateSubscribers:)`.
 
 Allow one request in flight per session, and wait for its full response before submitting the next. A write acknowledgement means the transport accepted that chunk, not that an operation completed. Notifications have no separate application chunk ACK/retransmission scheme. On a failed exchange, reconnect; retry a mutation with its original RPC identity. Invalid framing/authentication drops server session state; the central must disconnect and reconnect to subscribe afresh.
 
-## Authentication and encryption
+## Protobuf BLE transport (v2)
+
+The normative schema is [`Protocol/ble_wire.proto`](../Protocol/ble_wire.proto). Both the encrypted envelope and the decrypted RPC message use binary Protobuf. Nonces, proofs, ciphertext, file data, and stdout/stderr are raw `bytes` fields on BLE, with no base64 encoding. The existing four-byte big-endian frame length and GATT flow control are retained.
+
+The server detects the first envelope format and fixes it for the session. JSON clients begin with `{`; Protobuf clients send an `Envelope` with `wire_version: 2`. Format changes within a session are rejected. The handshake transcript prefix is `ble-connection/v2/`, and AES-GCM AAD is `ble-connection/v2/data`; these are distinct from v1, so changing an encoding cannot silently downgrade an authenticated session.
+
+Requests/responses retain RPC `version: 1`, UUID strings, boot IDs, and method semantics. `server.info` advertises `wire_formats: ["protobuf", "json"]`. The RPC version is independent of the wire encoding. Command/file parameters use a typed `Value` union, including signed 64-bit integers, binary bytes, explicit null, arrays, and objects. Nesting is limited to 24 value levels and Protobuf parsing to 64 message levels. Existing operation validation and limits still apply.
+
+Only the binary `data` argument of `fs.write`, `fs.append`, and `upload.chunk` is converted from local base64 to Protobuf bytes. Binary `data` fields in file reads and command streams are also bytes on the wire. Other strings, including environment variables, remain strings. The local CLI/MCP pipes and examples below retain JSON/base64 for interoperability.
+
+Request identity is checked after decoding into the existing RPC model. Deduplication hashes the sorted-key JSON representation of that model, **not arbitrary Protobuf serialization bytes**, so the same request can be retried across formats. A UUID reused with changed parameters remains an error. Keep original UUID spelling and boot ID.
+
+The diagnostic client defaults to `--wire protobuf`; use `--wire json` for an older server. The companion MCP defaults to `--wire auto`: it makes an authenticated read-only JSON capability query, reconnects with Protobuf when advertised, and otherwise keeps JSON. Mutations are never used as probes. An error after selecting Protobuf does not trigger a silent JSON retry. Select `--wire protobuf` to require binary transport.
+
+## Legacy JSON authentication and encryption (v1)
 
 Protocol v1 retains its original transcript/AAD labels for compatibility with deployed peers. These wire constants are independent of the Laptop Link app and repository names.
 
@@ -24,7 +38,7 @@ All binary JSON fields use standard padded base64. Enrollment key `K` is 32 rand
 2. Server → client: `{"type":"challenge","nonce":"<S>","proof":"<HMAC-SHA256(K, T || ASCII(server))>"}`.
 3. Client verifies the server proof and sends `{"type":"authenticate","proof":"<HMAC-SHA256(K, T || ASCII(client))>"}`.
 4. Server verifies the client proof. Both derive two 32-byte keys with HKDF-SHA256: input key `K`, salt `T`, info ASCII `client-to-server` or `server-to-client`.
-5. Server sends an encrypted `ready` byte string as its first data message. Subsequent plaintext messages are RPC JSON.
+5. Server sends an encrypted `ready` byte string as its first data message. Subsequent decrypted messages are RPC JSON in v1, or Protobuf Request/Response in v2.
 
 Encrypted envelope: `{"type":"data","sequence":0,"payload":"<ciphertext || 16-byte GCM tag>"}`.
 

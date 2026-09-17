@@ -7,6 +7,7 @@ import LinkProtocol
 public final class LinkCentralClient: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, @unchecked Sendable {
     private let queue = DispatchQueue(label: "ble.central")
     private let handshake: ClientHandshake
+    private let format: WireFormat
     private let name: String?
     private var request: RPCRequest
     private let completion: @Sendable (Result<RPCResponse, Error>) -> Void
@@ -19,9 +20,9 @@ public final class LinkCentralClient: NSObject, CBCentralManagerDelegate, CBPeri
     private var stage = "challenge"
     private var infoID: String?
 
-    public init(key: Data, name: String?, request: RPCRequest, timeout: Int,
+    public init(key: Data, name: String?, request: RPCRequest, timeout: Int, format: WireFormat = .protobuf,
                 completion: @escaping @Sendable (Result<RPCResponse, Error>) -> Void) throws {
-        handshake = try ClientHandshake(key: key); self.name = name; self.request = request; self.completion = completion
+        self.format = format; handshake = try ClientHandshake(key: key, format: format); self.name = name; self.request = request; self.completion = completion
         let readers: Set<String> = ["server.info", "fs.list", "fs.stat", "fs.read", "fs.search", "fs.hash",
                                     "exec.poll", "exec.list", "upload.status"]
         guard request.bootID != nil || readers.contains(request.method) else {
@@ -91,7 +92,7 @@ public final class LinkCentralClient: NSObject, CBCentralManagerDelegate, CBPeri
         if let error { finish(.failure(error)); return }
         guard characteristic.uuid == LinkServiceIDs.response, let value = characteristic.value else { return }
         do {
-            for data in try decoder.append(value) { try receive(WireJSON.decode(Envelope.self, from: data)) }
+            for data in try decoder.append(value) { try receive(format.decodeEnvelope(data)) }
         } catch { finish(.failure(error)) }
     }
 
@@ -107,18 +108,18 @@ public final class LinkCentralClient: NSObject, CBCentralManagerDelegate, CBPeri
             if request.method != "server.info", request.bootID == nil {
                 let info = RPCRequest(method: "server.info")
                 infoID = info.id; stage = "info"
-                try send(channel.seal(WireJSON.encode(info)))
-            } else { stage = "result"; try send(channel.seal(WireJSON.encode(request))) }
+                try send(channel.seal(format.encodeRequest(info)))
+            } else { stage = "result"; try send(channel.seal(format.encodeRequest(request))) }
             return
         }
-        let response = try WireJSON.decode(RPCResponse.self, from: data)
+        let response = try format.decodeResponse(data)
         if stage == "info" {
             guard response.id == infoID, response.error == nil else { throw response.error ?? RPCError("protocol", "Wrong response ID") }
             request.bootID = response.bootID; stage = "result"
             // Print the exact retry identity before submitting any operation.
             let retry = "Request \(request.id), bootID \(response.bootID)\n"
             FileHandle.standardError.write(Data(retry.utf8))
-            try send(channel.seal(WireJSON.encode(request))); return
+            try send(channel.seal(format.encodeRequest(request))); return
         }
         guard response.id == request.id else { throw RPCError("protocol", "Wrong response ID") }
         finish(.success(response))
@@ -126,7 +127,7 @@ public final class LinkCentralClient: NSObject, CBCentralManagerDelegate, CBPeri
 
     private func send(_ envelope: Envelope) throws {
         guard outgoing.isEmpty else { throw RPCError("protocol", "Previous write is unfinished") }
-        outgoing = try FrameDecoder.encode(WireJSON.encode(envelope)); pump()
+        outgoing = try FrameDecoder.encode(format.encodeEnvelope(envelope)); pump()
     }
 
     private func pump() {

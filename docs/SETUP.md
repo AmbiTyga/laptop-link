@@ -125,3 +125,11 @@ Send one compact RPC JSON object per line. Read `server.info` first and use its 
 10. Test a wrong key, denied Bluetooth permission, Bluetooth off, and sleep/wake. Record measured transfer speed; no throughput claim is made by local tests.
 
 For Claude, Codex, or another local MCP client, install [Laptop Link MCP](https://github.com/AmbiTyga/laptop-link-mcp) on the controlling laptop. It exposes file operations and command jobs over the same protocol and includes a portable Agent Skill. The remote server requires no additional Python runtime or MCP configuration.
+
+## Upgrading the BLE wire format
+
+Copy the entire updated source archive, including `Vendor` and `Protocol`, to a new directory. Build with the same Swift 6.3.3 compiler and compatible SDK as before. Generated Protobuf messages and their runtime are already included; no SwiftPM download or `protoc` installation is needed on this Mac.
+
+The updated server accepts legacy JSON clients as well as Protobuf clients. Restarting the server creates a new boot ID: finish or cancel jobs and resolve pending mutations before replacing a running server. Never rewrite a pending request's boot ID to resubmit it after an upgrade. Enrollment keys remain usable; pass the existing configuration path when launching the replacement app.
+
+The diagnostic client uses Protobuf by default. For an older server, pass `--wire json`. Laptop Link MCP's default `--wire auto` queries authenticated capabilities and reports its selection in the `transport.wire_format` field of status responses. Use `--wire protobuf` to require the new format.

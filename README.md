@@ -37,6 +37,14 @@ The first launch generates a unique, random 32-byte enrollment key:
 
 Transfer that file privately to the controlling Mac. Possession of this key authorizes remote filesystem access and command execution. **Do not include it in the source archive or paste its contents into a chat.** No credentials are shipped with the source code.
 
+## Protobuf transport
+
+Laptop-to-laptop messages now use **binary Protobuf** for both RPC bodies and encrypted envelopes. A 65536-byte upload chunk measured **65747 framed bytes**, versus **116861 with JSON**: **43.7% less application data**, including encryption and framing. This is a size measurement, not a promise of the same reduction in elapsed transfer time.
+
+The server accepts both Protobuf v2 and legacy JSON v1. The diagnostic client defaults to Protobuf; pass `--wire json` for a server built before this migration. The companion MCP can automatically select Protobuf after authenticating and querying capabilities. Existing JSON CLI request files and MCP tools keep their format.
+
+The SwiftProtobuf 1.38.1 runtime, its license/privacy manifest, and generated Swift messages are included in the repository. Normal builds require no `protoc`, code-generation step, package download, or working SwiftPM. The schema is in `Protocol/ble_wire.proto`; `scripts/generate-protobuf.sh` is only for maintainers changing it. See [the wire specification](docs/PROTOCOL.md).
+
 ## Capabilities
 
 - Directory listings, metadata, ranged binary reads, literal searches, SHA-256 hashes.
@@ -95,7 +103,7 @@ Save mutation request JSON **before** submitting it. If the connection drops, re
 ./scripts/source-archive.sh
 ```
 
-The default test script compiles a standalone executable and runs 12 checks without XCTest. Protocol checks exercise authentication/encryption/framing in memory; execution and file checks launch the actual server and communicate through its JSON-lines endpoint. They do not prove radio performance or macOS Bluetooth permission behavior on a second machine. Use the [two-Mac acceptance checklist](docs/SETUP.md#two-mac-acceptance-checklist) after copying.
+The default test script compiles a standalone executable and runs 17 checks without XCTest. Protocol checks exercise authentication/encryption/framing in memory; execution and file checks launch the actual server and communicate through its JSON-lines endpoint. They do not prove radio performance or macOS Bluetooth permission behavior on a second machine. Use the [two-Mac acceptance checklist](docs/SETUP.md#two-mac-acceptance-checklist) after copying.
 
 The original 17 XCTest tests are retained for development environments with a working Swift Package Manager and XCTest installation: `./scripts/check.sh --swiftpm`. App packaging can also opt into SwiftPM using `./scripts/package-apps.sh --swiftpm`. The `.swift-version` and `Package.swift` files apply to that optional workflow; the default build does not read the manifest.
 

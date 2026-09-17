@@ -33,12 +33,17 @@ public final class RequestRouter: @unchecked Sendable {
 
     public func handle(_ request: RPCRequest) -> RPCResponse { queue.sync { execute(request) } }
 
-    public func handle(_ data: Data, completion: @escaping @Sendable (Data) -> Void) {
+    public func handle(_ data: Data, format: WireFormat = .json, completion: @escaping @Sendable (Data) -> Void) {
         queue.async {
             let response: RPCResponse
-            do { response = self.execute(try WireJSON.decode(RPCRequest.self, from: data)) }
-            catch { response = RPCResponse(id: "", bootID: self.bootID, error: RPCError("invalid_request", "Malformed RPC JSON")) }
-            if let encoded = try? WireJSON.encode(response) { completion(encoded) }
+            do { response = self.execute(try format.decodeRequest(data)) }
+            catch { response = RPCResponse(id: "", bootID: self.bootID, error: RPCError("invalid_request", "Malformed RPC message")) }
+            do { completion(try format.encodeResponse(response)) }
+            catch {
+                let fallback = RPCResponse(id: response.id, bootID: self.bootID,
+                                           error: RPCError("response_too_large", "Reduce the result limit"))
+                if let encoded = try? format.encodeResponse(fallback) { completion(encoded) }
+            }
         }
     }
 
@@ -81,6 +86,7 @@ public final class RequestRouter: @unchecked Sendable {
             return .object([
                 "name": .string(configuration.name), "boot_id": .string(bootID),
                 "root": .string(files.paths.root.path), "protocol_version": .int(1),
+                "wire_formats": .array([.string("protobuf"), .string("json")]),
                 "commands_enabled": .bool(configuration.allowCommands),
                 "max_chunk_bytes": .int(65_536), "max_timeout_seconds": .int(Int64(configuration.maximumTimeoutSeconds)),
                 "methods": .array(Self.methods.map(JSONValue.string))

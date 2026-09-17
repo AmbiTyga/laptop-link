@@ -1,0 +1,49 @@
+syntax = "proto3";
+package ble.wire.v2;
+
+// BLE transport schema. RPC semantics remain version 1; the binary envelope is version 2.
+// Existing field numbers must never be repurposed. Reserve numbers of removed fields.
+message Envelope {
+  uint32 wire_version = 1;
+  enum Kind { UNSPECIFIED = 0; HELLO = 1; CHALLENGE = 2; AUTHENTICATE = 3; DATA = 4; }
+  Kind kind = 2;
+  bytes nonce = 3;
+  bytes proof = 4;
+  optional uint64 sequence = 5;
+  bytes payload = 6; // Raw AES-GCM ciphertext followed by the 16-byte tag.
+}
+
+message Request {
+  uint32 version = 1;
+  string id = 2; // Preserve the exact UUID spelling for retry identity.
+  string method = 3;
+  optional string boot_id = 4;
+  Object params = 5;
+}
+
+message Response {
+  uint32 version = 1;
+  string id = 2;
+  string boot_id = 3;
+  oneof outcome { Value result = 4; Failure error = 5; }
+}
+
+message Failure { string code = 1; string message = 2; }
+
+// Preserve signed 64-bit integers and explicit null/presence. google.protobuf.Struct
+// uses double for all numbers, which would lose precision for large byte offsets.
+message Value {
+  enum Null { NULL_VALUE = 0; }
+  oneof kind {
+    string string_value = 1;
+    sint64 integer_value = 2;
+    double double_value = 3;
+    bool bool_value = 4;
+    bytes bytes_value = 5;
+    Object object_value = 6;
+    List list_value = 7;
+    Null null_value = 8;
+  }
+}
+message Object { map<string, Value> fields = 1; }
+message List { repeated Value values = 1; }

@@ -6,12 +6,11 @@ import LinkProtocol
 final class PeripheralPeer {
     let central: CBCentral
     let token = UUID()
-    let handshake: ServerHandshake
+    var handshake: ServerHandshake?
+    var format: WireFormat?
     var decoder = FrameDecoder()
     var outbound = Data()
     var lastActivity = ProcessInfo.processInfo.systemUptime
     var busy = false
-    init(central: CBCentral, key: Data) {
-        self.central = central; handshake = ServerHandshake(key: key)
-    }
+    init(central: CBCentral) { self.central = central }
 }

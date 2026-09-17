@@ -50,12 +50,16 @@ link_module() {
         -emit-module-path "$link_output/modules/$name.swiftmodule" \
         -emit-library -static "Sources/$name/"*.swift -o "$link_output/lib$name.a"
 }
+echo 'Compiling vendored SwiftProtobuf'
+"$link_swiftc" "${link_flags[@]}" -package-name SwiftProtobuf -module-name SwiftProtobuf -emit-module \
+    -emit-module-path "$link_output/modules/SwiftProtobuf.swiftmodule" -emit-library -static \
+    Vendor/SwiftProtobuf/Sources/*.swift -o "$link_output/libSwiftProtobuf.a"
 link_module LinkProtocol
 link_module LinkServerKit
 link_module LinkBluetooth
 
 link_libraries=("$link_output/libLinkServerKit.a" "$link_output/libLinkBluetooth.a"
-    "$link_output/libLinkProtocol.a" "$link_output/ProcessSupport.o")
+    "$link_output/libLinkProtocol.a" "$link_output/libSwiftProtobuf.a" "$link_output/ProcessSupport.o")
 echo 'Linking link-server'
 "$link_swiftc" "${link_flags[@]}" -module-name LinkServerApp Sources/LinkServerApp/*.swift \
     "${link_libraries[@]}" -o "$link_output/link-server"

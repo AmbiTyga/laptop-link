@@ -1,6 +1,17 @@
 # Local and live BLE validation — 2026-09-17
 
-Environment: Apple Silicon, macOS 26.3.1, Swift 6.3.3 (`swift-6.3.3-RELEASE`). Both build paths use Swift 6 language mode with no external package dependencies. The remote Mac reports Apple's Swift 6.3.3 compiler, but its `swift-package` crashes while loading BuildServerProtocol; the new default path bypasses that executable.
+Environment: Apple Silicon, macOS 26.3.1, Swift 6.3.3 (`swift-6.3.3-RELEASE`). Both build paths use Swift 6 language mode with no build-time package downloads; the Protobuf migration vendors SwiftProtobuf 1.38.1. The remote Mac reports Apple's Swift 6.3.3 compiler, but its `swift-package` crashes while loading BuildServerProtocol; the new default path bypasses that executable.
+
+Current Protobuf migration checks:
+
+- The public package also builds through SwiftPM with a fresh cache and passes all **17 XCTest tests** after adding the vendored runtime.
+
+- **17/17 standalone checks passed**: the original 12 plus lossless binary/integer values, malformed-message limits and presence, both authenticated wire formats with domain separation, encrypted/framed size measurement, and binary file/command routing with cross-format retry deduplication.
+- A 65536-byte upload chunk measured **116861 bytes with JSON and 65747 with Protobuf**, including AES-GCM tag, envelope, and four-byte frame length: **43.7% fewer bytes**.
+- Large file bytes, stdout/stderr bytes, exact signed 64-bit values, empty objects/arrays, null, boolean false, Unicode, and unknown fields round-trip correctly. Explicit sequence zero is distinguished from a missing sequence.
+- Both wire formats reject replay/tampering. A v1/v2 handshake mismatch fails authentication. Request UUID spelling and canonical request fingerprints survive conversion.
+
+Earlier JSON baseline results (before the Protobuf migration):
 
 Completed:
 
@@ -32,8 +43,10 @@ Live tests between two physical Macs also passed:
 
 Not yet verified:
 
+- Physical Protobuf sessions and MCP automatic upgrade between two Macs; the live results above apply to the earlier JSON baseline. The unchanged JSON client also timed out during the migration follow-up.
+
 - Forced link loss during a request, sleep/wake recovery, denied Bluetooth permissions, long-duration reliability, and sustained throughput.
 - Intel or universal build, and execution on older macOS releases.
 - Automatic loading in each supported agent UI; the stdio MCP protocol is verified independently with the official SDK client.
 
-The core two-Mac connection, file transfer, command execution, and companion MCP stdio path are verified. The remaining acceptance cases in SETUP.md require additional device testing. No enrollment key is included in this report or the source archive.
+The earlier JSON baseline verified the two-Mac connection, file transfer, command execution, and companion MCP stdio path. The remaining acceptance cases in SETUP.md require additional device testing. No enrollment key is included in this report or the source archive.

@@ -9,7 +9,8 @@ let package = Package(
         .executable(name: "link-client", targets: ["LinkClientApp"])
     ],
     targets: [
-        .target(name: "LinkProtocol"),
+        .target(name: "SwiftProtobuf", path: "Vendor/SwiftProtobuf/Sources"),
+        .target(name: "LinkProtocol", dependencies: ["SwiftProtobuf"]),
         .target(name: "ProcessSupport"),
         .target(name: "LinkServerKit", dependencies: ["LinkProtocol", "ProcessSupport"]),
         .target(name: "LinkBluetooth", dependencies: ["LinkProtocol"]),

@@ -19,6 +19,11 @@ func rejects(_ operation: () throws -> Void) throws {
 struct CheckMain {
     static func main() {
         let checks: [(String, () throws -> Void)] = [
+            ("Protobuf binary values and lossless integers", ProtobufChecks.values),
+            ("Protobuf malformed input and presence validation", ProtobufChecks.validation),
+            ("Both wire handshakes, fragmentation and domain separation", ProtobufChecks.security),
+            ("Protobuf encrypted payload size", ProtobufChecks.sizes),
+            ("Binary router, file/command output and cross-format deduplication", ProtobufRouterChecks.routing),
             ("frame fragmentation and size limits", ProtocolChecks.frames),
             ("authentication, encryption, tamper and replay rejection", ProtocolChecks.authentication),
             ("file read/write, hash, patch and append deduplication", FileChecks.files),

@@ -4,7 +4,7 @@ import LinkProtocol
 
 /// Core Bluetooth delegates and all peer state are confined to queue.
 public final class LinkPeripheralServer: NSObject, CBPeripheralManagerDelegate, @unchecked Sendable {
-    public typealias Handler = @Sendable (Data, @escaping @Sendable (Data) -> Void) -> Void
+    public typealias Handler = @Sendable (Data, WireFormat, @escaping @Sendable (Data) -> Void) -> Void
     private let queue = DispatchQueue(label: "ble.peripheral")
     private let name: String, key: Data
     private let handler: Handler
@@ -54,7 +54,7 @@ public final class LinkPeripheralServer: NSObject, CBPeripheralManagerDelegate, 
     public func peripheralManager(_ peripheral: CBPeripheralManager, central: CBCentral,
                                   didSubscribeTo characteristic: CBCharacteristic) {
         guard characteristic.uuid == LinkServiceIDs.response, peers.count < 4 else { return }
-        peers[central.identifier] = PeripheralPeer(central: central, key: key)
+        peers[central.identifier] = PeripheralPeer(central: central)
         status("Client subscribed; awaiting authentication")
     }
 
@@ -89,19 +89,24 @@ public final class LinkPeripheralServer: NSObject, CBPeripheralManagerDelegate, 
     }
 
     private func receive(_ data: Data, peer: PeripheralPeer) throws {
-        let envelope = try WireJSON.decode(Envelope.self, from: data)
-        guard let channel = peer.handshake.channel else {
-            try enqueue(peer.handshake.receive(envelope), peer: peer)
-            if peer.handshake.channel != nil { status("Client authenticated") }
+        if peer.format == nil {
+            let format = try WireFormat.detect(data)
+            peer.format = format; peer.handshake = ServerHandshake(key: key, format: format)
+        }
+        guard let format = peer.format, let handshake = peer.handshake else { throw RPCError("protocol", "Missing session") }
+        let envelope = try format.decodeEnvelope(data)
+        guard let channel = handshake.channel else {
+            try enqueue(handshake.receive(envelope), peer: peer)
+            if handshake.channel != nil { status("Client authenticated (\(format.rawValue))") }
             return
         }
         let plain = try channel.open(envelope)
         peer.busy = true
         let id = peer.central.identifier, token = peer.token
-        handler(plain) { [weak self] response in
+        handler(plain, format) { [weak self] response in
             guard let self else { return }
             self.queue.async {
-                guard let current = self.peers[id], current.token == token, let channel = current.handshake.channel else { return }
+                guard let current = self.peers[id], current.token == token, let channel = current.handshake?.channel else { return }
                 do {
                     current.busy = false
                     try self.enqueue(channel.seal(response), peer: current)
@@ -112,7 +117,8 @@ public final class LinkPeripheralServer: NSObject, CBPeripheralManagerDelegate, 
 
     private func enqueue(_ envelope: Envelope, peer: PeripheralPeer) throws {
         guard peer.outbound.isEmpty else { throw RPCError("busy", "Transmit queue full") }
-        peer.outbound = try FrameDecoder.encode(WireJSON.encode(envelope))
+        guard let format = peer.format else { throw RPCError("protocol", "Missing wire format") }
+        peer.outbound = try FrameDecoder.encode(format.encodeEnvelope(envelope))
         flush(peer)
     }
 
@@ -132,7 +138,7 @@ public final class LinkPeripheralServer: NSObject, CBPeripheralManagerDelegate, 
     private func expirePeers() {
         let now = ProcessInfo.processInfo.systemUptime
         for (id, peer) in peers {
-            let limit: Double = peer.handshake.channel == nil ? 15 : 300
+            let limit: Double = peer.handshake?.channel == nil ? 15 : 300
             if !peer.busy, now - peer.lastActivity > limit { peers.removeValue(forKey: id) }
         }
     }

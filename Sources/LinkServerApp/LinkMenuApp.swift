@@ -25,7 +25,7 @@ final class LinkMenuApp: NSObject, NSApplicationDelegate {
             peripheral = LinkPeripheralServer(name: configuration.name, key: key, status: { [weak self] text in
                 FileHandle.standardError.write(Data("\(text)\n".utf8))
                 Task { @MainActor in self?.statusItem?.title = text }
-            }, handler: { data, completion in router.handle(data, completion: completion) })
+            }, handler: { data, format, completion in router.handle(data, format: format, completion: completion) })
             for number in [SIGTERM, SIGINT] {
                 Darwin.signal(number, SIG_IGN)
                 let source = DispatchSource.makeSignalSource(signal: number, queue: .main)

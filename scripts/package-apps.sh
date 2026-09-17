@@ -20,6 +20,9 @@ make_bundle() {
     local bundle="$1" executable="$2" identifier="$3" display_name="$4"
     mkdir -p "$bundle/Contents/MacOS"
     cp "$binary_dir/$executable" "$bundle/Contents/MacOS/$executable"
+    mkdir -p "$bundle/Contents/Resources/SwiftProtobuf"
+    cp Vendor/SwiftProtobuf/PrivacyInfo.xcprivacy "$bundle/Contents/Resources/SwiftProtobuf/"
+    cp Vendor/SwiftProtobuf/LICENSE.txt "$bundle/Contents/Resources/SwiftProtobuf/"
     cat > "$bundle/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
