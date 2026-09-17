@@ -52,7 +52,7 @@ To save diagnostics for sharing:
 ./scripts/check.sh 2>&1 | tee test-output.txt
 ```
 
-The last summary should say `12/12 standalone checks passed; 0 failed.` If piping through `tee` in an automated script, enable `set -o pipefail` so a test failure is not masked by tee's success. Run `./scripts/package-apps.sh` after the checks pass.
+The last summary should say `20/20 standalone checks passed; 0 failed.` If piping through `tee` in an automated script, enable `set -o pipefail` so a test failure is not masked by tee's success. Run `./scripts/package-apps.sh` after the checks pass.
 
 Alternatively, copy the already-built `dist/LaptopLinkServer.app` to an Apple Silicon Mac with a compatible OS; no compiler is needed to run the app. Keep the whole `.app` bundle intact, using Finder, `ditto`, or a zip that preserves bundle contents.
 
@@ -133,3 +133,7 @@ Copy the entire updated source archive, including `Vendor` and `Protocol`, to a 
 The updated server accepts legacy JSON clients as well as Protobuf clients. Restarting the server creates a new boot ID: finish or cancel jobs and resolve pending mutations before replacing a running server. Never rewrite a pending request's boot ID to resubmit it after an upgrade. Enrollment keys remain usable; pass the existing configuration path when launching the replacement app.
 
 The diagnostic client uses Protobuf by default. For an older server, pass `--wire json`. Laptop Link MCP's default `--wire auto` queries authenticated capabilities and reports its selection in the `transport.wire_format` field of status responses. Use `--wire protobuf` to require the new format.
+
+## Terminal window
+
+Rebuild the complete source archive to enable terminals. The server menu adds **New Terminal** and **Show Terminals**. Update the companion MCP too for its six `link_terminal_*` tools. See [interactive terminal setup and controls](TERMINALS.md). An older running server does not gain these methods until it is replaced and restarted.

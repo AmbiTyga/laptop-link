@@ -11,6 +11,7 @@ final class LinkMenuApp: NSObject, NSApplicationDelegate {
     private var peripheral: LinkPeripheralServer?
     private var item: NSStatusItem?
     private var statusItem: NSMenuItem?
+    private var terminals: [String: TerminalWindow] = [:]
     private var signalSources: [DispatchSourceSignal] = []
     init(configURL: URL) { self.configURL = configURL }
 
@@ -19,7 +20,9 @@ final class LinkMenuApp: NSObject, NSApplicationDelegate {
             if !FileManager.default.fileExists(atPath: configURL.path) { try firstLaunch() }
             let configuration = try ServerConfiguration.load(configURL)
             let key = try configuration.readKey()
-            let router = try RequestRouter(configuration: configuration)
+            let router = try RequestRouter(configuration: configuration, terminalOpened: { [weak self] session in
+                Task { @MainActor in self?.showTerminal(session) }
+            })
             self.router = router
             setupMenu(configuration: configuration)
             peripheral = LinkPeripheralServer(name: configuration.name, key: key, status: { [weak self] text in
@@ -58,10 +61,36 @@ final class LinkMenuApp: NSObject, NSApplicationDelegate {
         menu.addItem(statusItem!)
         menu.addItem(NSMenuItem(title: "Root: \(configuration.root)", action: nil, keyEquivalent: ""))
         menu.addItem(.separator())
+        let newTerminal = NSMenuItem(title: "New Terminal", action: #selector(newTerminal), keyEquivalent: "n")
+        newTerminal.target = self; menu.addItem(newTerminal)
+        let show = NSMenuItem(title: "Show Terminals", action: #selector(showTerminals), keyEquivalent: "")
+        show.target = self; menu.addItem(show)
         let settings = NSMenuItem(title: "Show configuration folder", action: #selector(showConfiguration), keyEquivalent: "")
         settings.target = self; menu.addItem(settings)
         menu.addItem(NSMenuItem(title: "Quit BLE server", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         item.menu = menu; self.item = item
+    }
+
+    private func showTerminal(_ session: TerminalSession) {
+        let controller = TerminalWindow(session: session)
+        terminals[session.id] = controller
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    @objc private func newTerminal() {
+        router?.openLocalTerminal { result in
+            if case .failure(let error) = result {
+                Task { @MainActor in
+                    let alert = NSAlert(); alert.messageText = "Cannot open terminal"
+                    alert.informativeText = error.localizedDescription; alert.runModal()
+                }
+            }
+        }
+    }
+
+    @objc private func showTerminals() {
+        terminals.values.forEach { $0.showWindow(nil); $0.window?.makeKeyAndOrderFront(nil) }
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
     @objc private func showConfiguration() {

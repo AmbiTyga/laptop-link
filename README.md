@@ -37,6 +37,10 @@ The first launch generates a unique, random 32-byte enrollment key:
 
 Transfer that file privately to the controlling Mac. Possession of this key authorizes remote filesystem access and command execution. **Do not include it in the source archive or paste its contents into a chat.** No credentials are shipped with the source code.
 
+## Visible interactive terminal
+
+Open **New Terminal** from the server menu, or use the companion MCP's `link_terminal_open`. A real terminal window on the receiving Mac shows the shared persistent shell. **Take Control** pauses agent input; **Return Control** hands it back. Closing the window hides it; **End Session** stops it. See [terminal sessions](docs/TERMINALS.md) for input, reconnects, and lifecycle details.
+
 ## Protobuf transport
 
 Laptop-to-laptop messages now use **binary Protobuf** for both RPC bodies and encrypted envelopes. A 65536-byte upload chunk measured **65747 framed bytes**, versus **116861 with JSON**: **43.7% less application data**, including encryption and framing. This is a size measurement, not a promise of the same reduction in elapsed transfer time.
@@ -103,7 +107,7 @@ Save mutation request JSON **before** submitting it. If the connection drops, re
 ./scripts/source-archive.sh
 ```
 
-The default test script compiles a standalone executable and runs 17 checks without XCTest. Protocol checks exercise authentication/encryption/framing in memory; execution and file checks launch the actual server and communicate through its JSON-lines endpoint. They do not prove radio performance or macOS Bluetooth permission behavior on a second machine. Use the [two-Mac acceptance checklist](docs/SETUP.md#two-mac-acceptance-checklist) after copying.
+The default test script compiles a standalone executable and runs 20 checks without XCTest. Protocol checks exercise authentication/encryption/framing in memory; execution and file checks launch the actual server and communicate through its JSON-lines endpoint. They do not prove radio performance or macOS Bluetooth permission behavior on a second machine. Use the [two-Mac acceptance checklist](docs/SETUP.md#two-mac-acceptance-checklist) after copying.
 
 The original 17 XCTest tests are retained for development environments with a working Swift Package Manager and XCTest installation: `./scripts/check.sh --swiftpm`. App packaging can also opt into SwiftPM using `./scripts/package-apps.sh --swiftpm`. The `.swift-version` and `Package.swift` files apply to that optional workflow; the default build does not read the manifest.
 
@@ -116,7 +120,7 @@ Targets: `LinkProtocol` (protocol/crypto), `LinkServerKit` (operations), `Proces
 - One RPC in flight per BLE session; up to four subscribed peers. Idle authenticated sessions expire after five minutes.
 - BLE request chunks use ATT writes with response. Notifications use Core Bluetooth flow control. Application-level responses confirm operations; on a lost response, reconnect and replay the same mutation identity. There is no automatic retry of command submission.
 - Job and upload recovery works across BLE reconnects while the server process remains alive. Restart recovery is deliberately not automatic. Job records and deduplication live in memory; output remains in the state directory for manual inspection.
-- Noninteractive commands only. Stdin is `/dev/null`; no PTY, input streaming, password prompts, or persistent shell. Shell commands use `/bin/zsh -c`, without loading login profiles.
+- Background `exec.*` jobs use `/dev/null` stdin and `/bin/zsh -c`. Interactive `terminal.*` sessions use a persistent PTY and `/bin/zsh -i`; their output is combined and they have no per-command timeout.
 - Jobs own their process group. Remaining group members are killed when the leader exits. Programs that deliberately detach into a new process group/session are not contained; this is not an OS sandbox.
 - Default limits: 128 jobs and 8192 mutation IDs per server run. Restart after finishing work when these limits are reached. Old state directories are retained; quit the server before manually removing unneeded run directories.
 - File listings are paginated and can change between pages. Search is literal, bounded to five seconds/10000 entries, skips symlinks, and skips content files over 1 MiB or invalid UTF-8. File copy is for regular files; directory moves are supported.

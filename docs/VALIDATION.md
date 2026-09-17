@@ -43,10 +43,19 @@ Live tests between two physical Macs also passed:
 
 Not yet verified:
 
-- Physical Protobuf sessions and MCP automatic upgrade between two Macs; the live results above apply to the earlier JSON baseline. The unchanged JSON client also timed out during the migration follow-up.
+- Interactive terminal operation over physical BLE after deploying this new terminal-enabled build; physical Protobuf file/command validation has passed as described below.
 
 - Forced link loss during a request, sleep/wake recovery, denied Bluetooth permissions, long-duration reliability, and sustained throughput.
 - Intel or universal build, and execution on older macOS releases.
 - Automatic loading in each supported agent UI; the stdio MCP protocol is verified independently with the official SDK client.
 
 The earlier JSON baseline verified the two-Mac connection, file transfer, command execution, and companion MCP stdio path. The remaining acceptance cases in SETUP.md require additional device testing. No enrollment key is included in this report or the source archive.
+
+## Interactive terminal and current Protobuf validation
+
+- **20/20 standalone checks passed** after adding persistent PTY, Protobuf input, write deduplication, resize, local ownership/epoch handoff, Ctrl+C, rolling history, disabled execution, and shutdown of background terminal jobs.
+- **32/32 MCP checks passed**, including six actual-server integration checks. Two exercise terminal tools and validation.
+- A local AppKit window check exercised Take Control / Return Control, rejected user typing while the agent owned input, verified terminal-renderer output, and confirmed hiding the window leaves the shell running.
+- The existing Protobuf build on the second Mac automatically negotiated Protobuf through the MCP bridge. A 65536-byte binary file round-trip with SHA-256, stdout/stderr with exit 7, and command timeout with retained output passed over BLE. The temporary test file was deleted. That server does not yet have the new terminal implementation.
+
+Full-screen interactive applications, long-lived terminal sessions, and interactive terminal traffic over physical BLE need further acceptance testing after deployment.

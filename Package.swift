@@ -9,12 +9,13 @@ let package = Package(
         .executable(name: "link-client", targets: ["LinkClientApp"])
     ],
     targets: [
+        .target(name: "SwiftTerm", path: "Vendor/SwiftTerm/Sources", swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(name: "SwiftProtobuf", path: "Vendor/SwiftProtobuf/Sources"),
         .target(name: "LinkProtocol", dependencies: ["SwiftProtobuf"]),
         .target(name: "ProcessSupport"),
         .target(name: "LinkServerKit", dependencies: ["LinkProtocol", "ProcessSupport"]),
         .target(name: "LinkBluetooth", dependencies: ["LinkProtocol"]),
-        .executableTarget(name: "LinkServerApp", dependencies: ["LinkServerKit", "LinkBluetooth"]),
+        .executableTarget(name: "LinkServerApp", dependencies: ["LinkServerKit", "LinkBluetooth", "SwiftTerm"]),
         .executableTarget(name: "LinkClientApp", dependencies: ["LinkBluetooth"]),
         .testTarget(name: "LaptopLinkTests", dependencies: ["LinkServerKit", "LinkBluetooth"])
     ]

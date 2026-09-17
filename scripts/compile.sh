@@ -43,6 +43,9 @@ echo "SDK: $link_sdk"
 "$link_clang" -isysroot "$link_sdk" -target "$link_target" -O2 \
     -I Sources/ProcessSupport/include -c Sources/ProcessSupport/ProcessSupport.c -o "$link_output/ProcessSupport.o"
 
+"$link_clang" -isysroot "$link_sdk" -target "$link_target" -O2 \
+    -I Sources/ProcessSupport/include -c Sources/ProcessSupport/TerminalProcess.c -o "$link_output/TerminalProcess.o"
+
 link_module() {
     local name="$1"
     echo "Compiling $name"
@@ -54,15 +57,20 @@ echo 'Compiling vendored SwiftProtobuf'
 "$link_swiftc" "${link_flags[@]}" -package-name SwiftProtobuf -module-name SwiftProtobuf -emit-module \
     -emit-module-path "$link_output/modules/SwiftProtobuf.swiftmodule" -emit-library -static \
     Vendor/SwiftProtobuf/Sources/*.swift -o "$link_output/libSwiftProtobuf.a"
+echo 'Compiling vendored SwiftTerm'
+"$link_swiftc" "${link_flags[@]}" -swift-version 5 -module-name SwiftTerm -emit-module \
+    -emit-module-path "$link_output/modules/SwiftTerm.swiftmodule" -emit-library -static \
+    Vendor/SwiftTerm/Sources/*.swift Vendor/SwiftTerm/Sources/Apple/*.swift Vendor/SwiftTerm/Sources/Mac/*.swift \
+    -o "$link_output/libSwiftTerm.a"
 link_module LinkProtocol
 link_module LinkServerKit
 link_module LinkBluetooth
 
 link_libraries=("$link_output/libLinkServerKit.a" "$link_output/libLinkBluetooth.a"
-    "$link_output/libLinkProtocol.a" "$link_output/libSwiftProtobuf.a" "$link_output/ProcessSupport.o")
+    "$link_output/libLinkProtocol.a" "$link_output/libSwiftProtobuf.a" "$link_output/ProcessSupport.o" "$link_output/TerminalProcess.o")
 echo 'Linking link-server'
 "$link_swiftc" "${link_flags[@]}" -module-name LinkServerApp Sources/LinkServerApp/*.swift \
-    "${link_libraries[@]}" -o "$link_output/link-server"
+    "${link_libraries[@]}" "$link_output/libSwiftTerm.a" -o "$link_output/link-server"
 echo 'Linking link-client'
 "$link_swiftc" "${link_flags[@]}" -module-name LinkClientApp Sources/LinkClientApp/*.swift \
     "${link_libraries[@]}" -o "$link_output/link-client"

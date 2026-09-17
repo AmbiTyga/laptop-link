@@ -9,15 +9,17 @@ public final class RequestRouter: @unchecked Sendable {
     private let files: FileOperations
     private let commands: CommandOperations
     private let uploads: UploadOperations
+    private let terminals: TerminalOperations
     private let lockHandle: FileHandle
     private var mutations: [String: (String, RPCResponse)] = [:]
     private let readers: Set<String> = ["server.info", "fs.list", "fs.stat", "fs.read", "fs.search", "fs.hash",
-                                        "exec.poll", "exec.list", "upload.status"]
+                                        "exec.poll", "exec.list", "upload.status", "terminal.read", "terminal.list"]
 
-    public init(configuration: ServerConfiguration) throws {
+    public init(configuration: ServerConfiguration, terminalOpened: @escaping @Sendable (TerminalSession) -> Void = { _ in }) throws {
         self.configuration = configuration
         let paths = try PathPolicy(root: configuration.root)
         files = FileOperations(paths: paths)
+        terminals = TerminalOperations(configuration: configuration, paths: paths, opened: terminalOpened)
         let state = URL(fileURLWithPath: configuration.stateDirectory)
         try FileManager.default.createDirectory(at: state, withIntermediateDirectories: true,
                                                 attributes: [.posixPermissions: 0o700])
@@ -93,15 +95,21 @@ public final class RequestRouter: @unchecked Sendable {
             ])
         }
         if r.method.hasPrefix("fs.") { return try files.handle(r.method, r.params) }
+        if r.method.hasPrefix("terminal.") { return try terminals.handle(r.method, r.params) }
         if r.method.hasPrefix("exec.") { return try commands.handle(r.method, r.params) }
         if r.method.hasPrefix("upload.") { return try uploads.handle(r.method, r.params) }
         throw RPCError("unknown_method", r.method)
     }
 
-    public func shutdown() { queue.sync { commands.shutdown() } }
+    public func openLocalTerminal(completion: @escaping @Sendable (Result<TerminalSession, Error>) -> Void) {
+        queue.async { completion(Result { try self.terminals.open([:], local: true) }) }
+    }
+
+    public func shutdown() { queue.sync { commands.shutdown(); terminals.shutdown() } }
 
     public static let methods = ["server.info", "fs.list", "fs.stat", "fs.read", "fs.hash", "fs.search",
                                  "fs.write", "fs.append", "fs.patch", "fs.mkdir", "fs.copy", "fs.move", "fs.delete",
                                  "upload.begin", "upload.chunk", "upload.status", "upload.commit", "upload.abort",
-                                 "exec.start", "exec.poll", "exec.cancel", "exec.list"]
+                                 "exec.start", "exec.poll", "exec.cancel", "exec.list",
+                                 "terminal.open", "terminal.list", "terminal.read", "terminal.write", "terminal.resize", "terminal.close"]
 }

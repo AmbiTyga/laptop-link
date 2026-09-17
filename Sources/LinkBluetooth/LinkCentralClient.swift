@@ -24,7 +24,7 @@ public final class LinkCentralClient: NSObject, CBCentralManagerDelegate, CBPeri
                 completion: @escaping @Sendable (Result<RPCResponse, Error>) -> Void) throws {
         self.format = format; handshake = try ClientHandshake(key: key, format: format); self.name = name; self.request = request; self.completion = completion
         let readers: Set<String> = ["server.info", "fs.list", "fs.stat", "fs.read", "fs.search", "fs.hash",
-                                    "exec.poll", "exec.list", "upload.status"]
+                                    "exec.poll", "exec.list", "upload.status", "terminal.read", "terminal.list"]
         guard request.bootID != nil || readers.contains(request.method) else {
             throw RPCError("boot_id_required", "Fetch server.info and save its bootID in mutation request JSON before submitting; retain the same UUID and bootID for retries")
         }

@@ -19,6 +19,9 @@ func rejects(_ operation: () throws -> Void) throws {
 struct CheckMain {
     static func main() {
         let checks: [(String, () throws -> Void)] = [
+            ("persistent PTY shell, Protobuf input, deduplication and resize", TerminalChecks.persistentShell),
+            ("terminal local takeover, stale epochs and Ctrl+C", TerminalChecks.ownership),
+            ("terminal output bounds, disabled execution and shutdown cleanup", TerminalChecks.limitsAndCleanup),
             ("Protobuf binary values and lossless integers", ProtobufChecks.values),
             ("Protobuf malformed input and presence validation", ProtobufChecks.validation),
             ("Both wire handshakes, fragmentation and domain separation", ProtobufChecks.security),

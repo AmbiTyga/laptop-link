@@ -22,7 +22,7 @@ The server detects the first envelope format and fixes it for the session. JSON 
 
 Requests/responses retain RPC `version: 1`, UUID strings, boot IDs, and method semantics. `server.info` advertises `wire_formats: ["protobuf", "json"]`. The RPC version is independent of the wire encoding. Command/file parameters use a typed `Value` union, including signed 64-bit integers, binary bytes, explicit null, arrays, and objects. Nesting is limited to 24 value levels and Protobuf parsing to 64 message levels. Existing operation validation and limits still apply.
 
-Only the binary `data` argument of `fs.write`, `fs.append`, and `upload.chunk` is converted from local base64 to Protobuf bytes. Binary `data` fields in file reads and command streams are also bytes on the wire. Other strings, including environment variables, remain strings. The local CLI/MCP pipes and examples below retain JSON/base64 for interoperability.
+Only the binary `data` argument of `fs.write`, `fs.append`, `upload.chunk`, and `terminal.write` is converted from local base64 to Protobuf bytes. Binary `data` fields in file reads and command streams are also bytes on the wire. Other strings, including environment variables, remain strings. The local CLI/MCP pipes and examples below retain JSON/base64 for interoperability.
 
 Request identity is checked after decoding into the existing RPC model. Deduplication hashes the sorted-key JSON representation of that model, **not arbitrary Protobuf serialization bytes**, so the same request can be retried across formats. A UUID reused with changed parameters remains an error. Keep original UUID spelling and boot ID.
 
@@ -54,7 +54,7 @@ Every request contains `version`, UUID `id`, `method`, and object `params`. `boo
 
 Response contains `version: 1`, matching `id`, `bootID`, and either `result` or `error: {"code":"...","message":"..."}`. Optional fields are omitted, not guaranteed to appear as null. Results are bounded to 128 KiB before encryption; reduce page sizes if `response_too_large` is returned.
 
-All operations except `server.info`, `fs.list/stat/read/search/hash`, `exec.poll/list`, and `upload.status` are treated as mutations. A duplicate mutation ID with identical parameters in the same boot returns its cached response, including cached failures. Different parameters produce `id_conflict`. Entries are retained for the server run, with an 8192-entry admission cap and no eviction. Read-only requests may execute again. Use globally unique UUIDs for new requests; retain the UUID and bootID on retries.
+All operations except `server.info`, `fs.list/stat/read/search/hash`, `exec.poll/list`, `terminal.read/list`, and `upload.status` are treated as mutations. A duplicate mutation ID with identical parameters in the same boot returns its cached response, including cached failures. Different parameters produce `id_conflict`. Entries are retained for the server run, with an 8192-entry admission cap and no eviction. Read-only requests may execute again. Use globally unique UUIDs for new requests; retain the UUID and bootID on retries.
 
 There is no exactly-once guarantee across server crashes. A previous bootID is rejected with `server_changed`. After a crash, inspect files/output to determine an operation's outcome before deliberately creating a new request. Cancellation cannot undo effects already performed.
 
@@ -123,3 +123,20 @@ States: `running`, `exited`, `timed_out`, `cancelled`. Timeout/cancel sends SIGT
 After a terminal state, continue polling both streams until each `next_offset` equals `retained_bytes`. Decode base64, preserve binary bytes, and use an incremental UTF-8 decoder for text display. stdout and stderr have separate offsets; their global interleaving is not guaranteed. Truncation is explicit through `discarded_bytes`. Output retention is capped independently for each stream, while pipes continue draining to avoid deadlocks. Disk errors appear in the stream's `error` field.
 
 BLE disconnect does not cancel a job; its execution timeout continues locally. A request/connection timeout at the client does not imply that the command stopped. Use `exec.cancel` or let the server execution timeout expire. Server shutdown kills active job groups; abrupt server crashes do not promise orphan cleanup or job recovery.
+
+## Interactive terminal RPCs
+
+All terminal operations require the current boot ID. `terminal.read` and `terminal.list` are read-only; all other methods use the mutation ledger, including input writes. Terminal input's `data` is raw Protobuf bytes on BLE and base64 at the local JSON boundary.
+
+| Method | Parameters | Result |
+|---|---|---|
+| `terminal.open` | `cwd="."`, optional string map `env`, `cols=100` (2–500), `rows=30` (2–200) | New session snapshot; visible window in app mode |
+| `terminal.list` | `{}` | Session snapshots with one output byte each |
+| `terminal.read` | `session_id`, `offset=0`, `max_bytes=16384` (1–32768) | Session snapshot plus combined output |
+| `terminal.write` | `session_id`, `control_epoch`, base64 `data` (1–65536 bytes) | `accepted_bytes`; not execution confirmation |
+| `terminal.resize` | `session_id`, `control_epoch`, `cols`, `rows` | Session snapshot |
+| `terminal.close` | `session_id`, `control_epoch` | Snapshot; exit may still be pending |
+
+Snapshots include `session_id`, `state` (`running`/`exited`), `owner` (`local`/`agent`), positive `control_epoch`, `initial_cwd`, PID, dimensions, nullable shell `exit_code`/`signal`/`io_error`, pending input byte count, and `output`. Output contains `data`, actual `offset`, `next_offset`, `first_offset`, `total_bytes`, and `truncated`. Poll/drain until exited and next_offset equals total_bytes. stdout/stderr are combined; bytes may contain ANSI terminal sequences. Initial cwd is not a live directory tracker.
+
+Only the local UI can change ownership. An agent mutation requires `owner=agent` and the current epoch; otherwise it fails with `local_control` or `stale_control`. Successful duplicate mutations return the cached result without replaying input, regardless of later ownership changes. This does not grant current control. Ended sessions reject new writes with `terminal_closed`. See [terminal sessions](TERMINALS.md) for lifecycle, cleanup, limits, and handoff semantics.

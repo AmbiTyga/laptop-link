@@ -33,7 +33,7 @@ enum ProtobufValues {
 
     static func requestObject(_ request: RPCRequest) throws -> Ble_Wire_V2_Object {
         var object = try encode(.object(request.params)).objectValue
-        if ["fs.write", "fs.append", "upload.chunk"].contains(request.method),
+        if ["fs.write", "fs.append", "upload.chunk", "terminal.write"].contains(request.method),
            let text = request.params["data"]?.string, let bytes = Data(base64Encoded: text),
            bytes.base64EncodedString() == text {
             var field = Ble_Wire_V2_Value(); field.bytesValue = bytes
